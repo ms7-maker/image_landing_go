@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Генерация…</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 40px 16px; color: #111; background: #C9C9C4; }
+      .wrap { width: min(490px, 100%); margin: 0 auto; }
+      .card { padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background: rgba(255,255,255,0.72); backdrop-filter: blur(6px); }
+      .muted { color: #6b7280; font-size: 14px; }
+      .bar { height: 12px; background: #f3f4f6; border-radius: 999px; overflow: hidden; border: 1px solid #e5e7eb; }
+      .bar > div { height: 100%; width: 0%; background: #C49E0D; transition: width 250ms ease; }
+      .row { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+      .error { margin-top: 12px; padding: 12px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+      .minierror { margin-top: 10px; padding: 10px; border-radius: 10px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 14px; }
+      img { max-width: 100%; border-radius: 12px; border: 1px solid #e5e7eb; }
+      a.btn { display: inline-block; margin-top: 14px; padding: 10px 14px; border-radius: 10px; background: #111827; color: white; text-decoration: none; }
+      form { margin-top: 18px; }
+      textarea { width: 100%; min-height: 90px; padding: 12px; border-radius: 10px; border: 1px solid #d1d5db; }
+      select { padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; }
+      button { padding: 12px 16px; border-radius: 10px; border: 0; background: #111827; color: white; cursor: pointer; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      {% if not_found %}
+        <div class="card">
+          <h2>Задача не найдена</h2>
+          <p class="muted">Возможно, вы открыли старую ссылку.</p>
+          <a class="btn" href="{{ url_for('index') }}">На главную</a>
+        </div>
+      {% else %}
+        <div class="card">
+          <h2 style="margin: 0 0 6px;">Генерация изображения</h2>
+          <p class="muted" style="margin: 0 0 14px;">Job ID: <span id="jobId">{{ job_id }}</span></p>
+
+          <h3 style="margin: 0 0 8px;">Новый запрос</h3>
+          <form method="post" action="{{ url_for('generate') }}" style="margin-top: 0;">
+            <label class="muted" for="prompt">Промпт</label>
+            <textarea id="prompt" name="prompt" placeholder="Например: лендинг для онлайн-школы">{{ prompt }}</textarea>
+            <div class="grid" style="margin-top: 10px;">
+              <div>
+                <label class="muted" for="style">Стиль</label>
+                <select id="style" name="style">
+                  {% for key, label in styles.items() %}
+                    <option value="{{ key }}" {% if style == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <button type="submit">Сгенерировать</button>
+              </div>
+            </div>
+          </form>
+
+          <h3 style="margin: 18px 0 8px;">Прогресс</h3>
+          <div class="bar" aria-label="progress">
+            <div id="barFill" style="width: {{ progress }}%"></div>
+          </div>
+          <p class="muted" style="margin-top: 10px;">
+            Статус: <b id="statusText">{{ status }}</b>
+            · Прогресс: <b id="progressText">{{ progress }}%</b>
+          </p>
+
+          <div id="errorBox" class="error" style="display: none;"></div>
+
+          <div class="row" style="margin-top: 18px;">
+            <div>
+              <h3 style="margin: 0 0 8px;">Результат</h3>
+              <div id="resultArea">
+                <div style="display: grid; gap: 14px;">
+                  <div>
+                    <p class="muted" style="margin: 0 0 6px;"><b>OpenAI (direct)</b>
+                      {% if openai_seconds is not none %}
+                        · {{ "%.2f"|format(openai_seconds) }}s
+                      {% endif %}
+                    </p>
+                    <div id="openaiBlock">
+                      {% if openai_image_url %}
+                        <img src="{{ openai_image_url }}" alt="OpenAI direct result" />
+                        <div><a class="btn" href="{{ openai_image_url }}" target="_blank" rel="noreferrer">Открыть PNG</a></div>
+                      {% elif openai_error %}
+                        <div class="minierror">OpenAI ошибка: {{ openai_error }}</div>
+                      {% else %}
+                        <p class="muted">Ожидаем…</p>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p class="muted" style="margin: 0 0 6px;"><b>ProxyAPI</b>
+                      {% if proxy_seconds is not none %}
+                        · {{ "%.2f"|format(proxy_seconds) }}s
+                      {% endif %}
+                    </p>
+                    <div id="proxyBlock">
+                      {% if proxy_image_url %}
+                        <img src="{{ proxy_image_url }}" alt="ProxyAPI result" />
+                        <div><a class="btn" href="{{ proxy_image_url }}" target="_blank" rel="noreferrer">Открыть PNG</a></div>
+                      {% elif proxy_error %}
+                        <div class="minierror">ProxyAPI ошибка: {{ proxy_error }}</div>
+                      {% else %}
+                        <p class="muted">Ожидаем…</p>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="muted" style="margin-top: 10px;">Можно отправлять новые запросы, не дожидаясь текущего.</p>
+        </div>
+
+        <script>
+          const jobId = "{{ job_id }}";
+          const barFill = document.getElementById("barFill");
+          const statusText = document.getElementById("statusText");
+          const progressText = document.getElementById("progressText");
+          const errorBox = document.getElementById("errorBox");
+          const resultArea = document.getElementById("resultArea");
+          const openaiBlock = document.getElementById("openaiBlock");
+          const proxyBlock = document.getElementById("proxyBlock");
+
+          function setError(msg) {
+            errorBox.style.display = "block";
+            errorBox.textContent = msg;
+          }
+
+          function setProgress(pct) {
+            const p = Math.max(0, Math.min(100, pct || 0));
+            barFill.style.width = p + "%";
+            progressText.textContent = p + "%";
+          }
+
+          async function poll() {
+            try {
+              const res = await fetch(`/status/${jobId}`, { cache: "no-store" });
+              if (!res.ok) {
+                setError("Не удалось получить статус задачи.");
+                return;
+              }
+              const data = await res.json();
+              statusText.textContent = data.status;
+              setProgress(data.progress);
+
+              if (data.status === "error") {
+                if (data.error) setError(data.error);
+                // даже при error мы можем показать частичные результаты
+              }
+
+              const openaiTime = (typeof data.openai_seconds === "number") ? ` · ${data.openai_seconds.toFixed(2)}s` : "";
+              const proxyTime = (typeof data.proxy_seconds === "number") ? ` · ${data.proxy_seconds.toFixed(2)}s` : "";
+
+              if (openaiBlock) {
+                if (data.openai_image_url) {
+                  openaiBlock.innerHTML = `
+                    <img src="${data.openai_image_url}" alt="OpenAI direct result" />
+                    <div><a class="btn" href="${data.openai_image_url}" target="_blank" rel="noreferrer">Открыть PNG</a></div>
+                    <p class="muted" style="margin: 8px 0 0;"><b>OpenAI (direct)</b>${openaiTime}</p>
+                  `;
+                } else if (data.openai_error) {
+                  openaiBlock.innerHTML = `<div class="minierror">OpenAI ошибка: ${data.openai_error}</div>`;
+                }
+              }
+
+              if (proxyBlock) {
+                if (data.proxy_image_url) {
+                  proxyBlock.innerHTML = `
+                    <img src="${data.proxy_image_url}" alt="ProxyAPI result" />
+                    <div><a class="btn" href="${data.proxy_image_url}" target="_blank" rel="noreferrer">Открыть PNG</a></div>
+                    <p class="muted" style="margin: 8px 0 0;"><b>ProxyAPI</b>${proxyTime}</p>
+                  `;
+                } else if (data.proxy_error) {
+                  proxyBlock.innerHTML = `<div class="minierror">ProxyAPI ошибка: ${data.proxy_error}</div>`;
+                }
+              }
+
+              // Если оба результата готовы (или оба с ошибками) — прекращаем опрос
+              const openaiDone = !!data.openai_image_url || !!data.openai_error;
+              const proxyDone = !!data.proxy_image_url || !!data.proxy_error;
+              if (openaiDone && proxyDone && (data.status === "done" || data.status === "error")) return;
+
+              // Если ещё работает — продолжим опрос
+              setTimeout(poll, 1000);
+            } catch (e) {
+              setError("Ошибка сети при опросе статуса.");
+            }
+          }
+
+          // Старт опроса сразу
+          poll();
+        </script>
+      {% endif %}
+    </div>
+  </body>
+</html>
+
