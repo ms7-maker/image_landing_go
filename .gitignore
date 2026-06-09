@@ -6,3 +6,4 @@ __pycache__/
 # Сгенерированные картинки — не в git; пустая папка — через .gitkeep
 outputs/*
 !outputs/.gitkeep
+!outputs/landing_go.png
